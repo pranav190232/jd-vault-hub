@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { Upload, File, X, Eye, CheckCircle, AlertCircle } from 'lucide-react';
+import mammoth from 'mammoth';
 
 interface UploadedFile {
   id: string;
@@ -140,11 +141,14 @@ const JDUpload = () => {
       };
       reader.readAsDataURL(file.file);
     } else if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setPreviewContent(e.target?.result as string);
-      };
-      reader.readAsDataURL(file.file);
+      try {
+        const arrayBuffer = await file.file.arrayBuffer();
+        const result = await mammoth.extractRawText({ arrayBuffer });
+        setPreviewContent(result.value);
+      } catch (error) {
+        console.error('Error reading Word document:', error);
+        setPreviewContent('Error: Could not read Word document content.');
+      }
     }
   };
 
@@ -346,20 +350,9 @@ const JDUpload = () => {
                         />
                       )}
                       {previewFile.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' && (
-                        <div className="p-4 text-center">
-                          <div className="flex items-center justify-center space-x-2 text-muted-foreground mb-4">
-                            <AlertCircle className="w-5 h-5" />
-                            <span>Word documents require external viewer</span>
-                          </div>
-                          <a
-                            href={previewContent}
-                            download={previewFile.name}
-                            className="inline-flex items-center space-x-2 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
-                          >
-                            <File className="w-4 h-4" />
-                            <span>Download to view</span>
-                          </a>
-                        </div>
+                        <pre className="p-4 text-sm whitespace-pre-wrap bg-muted/30 text-foreground">
+                          {previewContent}
+                        </pre>
                       )}
                     </div>
                   ) : (
