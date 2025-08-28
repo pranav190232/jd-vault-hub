@@ -21,6 +21,7 @@ const JDUpload = () => {
   const [uploading, setUploading] = useState(false);
   const [previewFile, setPreviewFile] = useState<UploadedFile | null>(null);
   const [previewContent, setPreviewContent] = useState<string | null>(null);
+  const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
   const { toast } = useToast();
 
   const validateFile = (file: File): boolean => {
@@ -120,12 +121,22 @@ const JDUpload = () => {
     if (previewFile?.id === id) {
       setPreviewFile(null);
       setPreviewContent(null);
+      if (previewBlobUrl) {
+        URL.revokeObjectURL(previewBlobUrl);
+        setPreviewBlobUrl(null);
+      }
     }
   };
 
   const handlePreviewFile = async (file: UploadedFile) => {
     setPreviewFile(file);
     setPreviewContent(null);
+    
+    // Clean up previous blob URL
+    if (previewBlobUrl) {
+      URL.revokeObjectURL(previewBlobUrl);
+      setPreviewBlobUrl(null);
+    }
 
     // Read file content for preview
     if (file.type === 'text/plain') {
@@ -135,11 +146,10 @@ const JDUpload = () => {
       };
       reader.readAsText(file.file);
     } else if (file.type === 'application/pdf') {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setPreviewContent(e.target?.result as string);
-      };
-      reader.readAsDataURL(file.file);
+      // Create blob URL for PDF
+      const blobUrl = URL.createObjectURL(file.file);
+      setPreviewBlobUrl(blobUrl);
+      setPreviewContent('pdf-ready');
     } else if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
       try {
         const arrayBuffer = await file.file.arrayBuffer();
@@ -342,9 +352,9 @@ const JDUpload = () => {
                           {previewContent}
                         </pre>
                       )}
-                      {previewFile.type === 'application/pdf' && (
+                      {previewFile.type === 'application/pdf' && previewBlobUrl && (
                         <iframe
-                          src={previewContent}
+                          src={previewBlobUrl}
                           className="w-full h-96 border-0"
                           title="PDF Preview"
                         />
