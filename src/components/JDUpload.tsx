@@ -19,6 +19,7 @@ const JDUpload = () => {
   const [dragActive, setDragActive] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [previewFile, setPreviewFile] = useState<UploadedFile | null>(null);
+  const [previewContent, setPreviewContent] = useState<string | null>(null);
   const { toast } = useToast();
 
   const validateFile = (file: File): boolean => {
@@ -117,6 +118,33 @@ const JDUpload = () => {
     setFiles(prev => prev.filter(file => file.id !== id));
     if (previewFile?.id === id) {
       setPreviewFile(null);
+      setPreviewContent(null);
+    }
+  };
+
+  const handlePreviewFile = async (file: UploadedFile) => {
+    setPreviewFile(file);
+    setPreviewContent(null);
+
+    // Read file content for preview
+    if (file.type === 'text/plain') {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setPreviewContent(e.target?.result as string);
+      };
+      reader.readAsText(file.file);
+    } else if (file.type === 'application/pdf') {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setPreviewContent(e.target?.result as string);
+      };
+      reader.readAsDataURL(file.file);
+    } else if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setPreviewContent(e.target?.result as string);
+      };
+      reader.readAsDataURL(file.file);
     }
   };
 
@@ -250,7 +278,7 @@ const JDUpload = () => {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => setPreviewFile(file)}
+                        onClick={() => handlePreviewFile(file)}
                       >
                         <Eye className="w-4 h-4" />
                       </Button>
@@ -302,13 +330,44 @@ const JDUpload = () => {
                     </div>
                   </div>
                 </div>
-                <div className="p-4 rounded-lg bg-muted/50 border border-border/50">
-                  <div className="flex items-center space-x-2 text-muted-foreground">
-                    <AlertCircle className="w-4 h-4" />
-                    <span className="text-sm">
-                      File preview not available in demo mode. In production, this would show the file content.
-                    </span>
-                  </div>
+                <div className="rounded-lg border border-border/50 overflow-hidden">
+                  {previewContent ? (
+                    <div className="max-h-96 overflow-auto">
+                      {previewFile.type === 'text/plain' && (
+                        <pre className="p-4 text-sm font-mono whitespace-pre-wrap bg-muted/30 text-foreground">
+                          {previewContent}
+                        </pre>
+                      )}
+                      {previewFile.type === 'application/pdf' && (
+                        <iframe
+                          src={previewContent}
+                          className="w-full h-96 border-0"
+                          title="PDF Preview"
+                        />
+                      )}
+                      {previewFile.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' && (
+                        <div className="p-4 text-center">
+                          <div className="flex items-center justify-center space-x-2 text-muted-foreground mb-4">
+                            <AlertCircle className="w-5 h-5" />
+                            <span>Word documents require external viewer</span>
+                          </div>
+                          <a
+                            href={previewContent}
+                            download={previewFile.name}
+                            className="inline-flex items-center space-x-2 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+                          >
+                            <File className="w-4 h-4" />
+                            <span>Download to view</span>
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="p-4 text-center">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto mb-2"></div>
+                      <span className="text-sm text-muted-foreground">Loading preview...</span>
+                    </div>
+                  )}
                 </div>
               </div>
             </CardContent>
