@@ -443,23 +443,23 @@ const JDUpload = () => {
                       </div>
                     </div>
                   </div>
-                  <div className="rounded-lg border border-border/50 overflow-hidden max-h-[60vh]">
+                  <div className="rounded-lg border border-border/50 overflow-hidden h-[60vh]">
                     {previewContent ? (
-                      <div className="overflow-auto">
+                      <div className="overflow-auto h-full">
                         {previewFile.type === 'text/plain' && (
-                          <pre className="p-4 text-sm font-mono whitespace-pre-wrap bg-muted/30 text-foreground">
+                          <pre className="p-4 text-sm font-mono whitespace-pre-wrap bg-muted/30 text-foreground h-full">
                             {previewContent}
                           </pre>
                         )}
                         {previewFile.type === 'application/pdf' && previewBlobUrl && (
                           <iframe
                             src={previewBlobUrl}
-                            className="w-full h-[60vh] border-0"
+                            className="w-full h-full border-0"
                             title="PDF Preview"
                           />
                         )}
                         {previewFile.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' && (
-                          <pre className="p-4 text-sm whitespace-pre-wrap bg-muted/30 text-foreground">
+                          <pre className="p-4 text-sm whitespace-pre-wrap bg-muted/30 text-foreground h-full">
                             {previewContent}
                           </pre>
                         )}
