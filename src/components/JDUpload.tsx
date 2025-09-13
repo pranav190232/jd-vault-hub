@@ -15,6 +15,18 @@ interface UploadedFile {
   file: File;
 }
 
+interface ExtractedInfo {
+  name: string;
+  skills: string[];
+  education: string[];
+  projects: string[];
+  experience: string[];
+  contact: {
+    email: string;
+    phone: string;
+  };
+}
+
 const fileCategories = [
   { name: "All Files", count: 0 },
   { name: "PDF", count: 0 },
@@ -30,6 +42,8 @@ const JDUpload = () => {
   const [previewContent, setPreviewContent] = useState<string | null>(null);
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState("All Files");
+  const [extractedInfo, setExtractedInfo] = useState<ExtractedInfo[]>([]);
+  const [extracting, setExtracting] = useState(false);
   const { toast } = useToast();
 
   const validateFile = (file: File): boolean => {
@@ -204,6 +218,166 @@ const JDUpload = () => {
     }
   };
 
+  const extractInfoFromText = (text: string): ExtractedInfo => {
+    const lines = text.toLowerCase().split('\n').map(line => line.trim());
+    const originalLines = text.split('\n').map(line => line.trim());
+    
+    // Extract name (usually in first few lines or after "name:" pattern)
+    let name = '';
+    for (let i = 0; i < Math.min(5, originalLines.length); i++) {
+      const line = originalLines[i];
+      if (line && !line.includes('@') && !line.includes('phone') && 
+          !line.includes('email') && line.length > 2 && line.length < 50) {
+        name = line;
+        break;
+      }
+    }
+    
+    // Extract email
+    const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
+    const emailMatch = text.match(emailRegex);
+    const email = emailMatch ? emailMatch[0] : '';
+    
+    // Extract phone
+    const phoneRegex = /[\+]?[1-9]?[\d\s\-\(\)]{8,15}/g;
+    const phoneMatch = text.match(phoneRegex);
+    const phone = phoneMatch ? phoneMatch[0] : '';
+    
+    // Extract skills
+    const skillKeywords = ['skills', 'technical skills', 'technologies', 'programming languages'];
+    const skills: string[] = [];
+    
+    for (let i = 0; i < lines.length; i++) {
+      if (skillKeywords.some(keyword => lines[i].includes(keyword))) {
+        // Look for skills in next few lines
+        for (let j = i + 1; j < Math.min(i + 10, lines.length); j++) {
+          const line = originalLines[j];
+          if (line && !lines[j].includes('experience') && !lines[j].includes('education')) {
+            // Split by common delimiters
+            const lineSkills = line.split(/[,;•·\-\|]/).map(s => s.trim()).filter(s => s.length > 1);
+            skills.push(...lineSkills);
+          }
+        }
+        break;
+      }
+    }
+    
+    // Extract education
+    const educationKeywords = ['education', 'academic', 'degree', 'university', 'college'];
+    const education: string[] = [];
+    
+    for (let i = 0; i < lines.length; i++) {
+      if (educationKeywords.some(keyword => lines[i].includes(keyword))) {
+        for (let j = i + 1; j < Math.min(i + 8, lines.length); j++) {
+          const line = originalLines[j];
+          if (line && line.length > 10) {
+            education.push(line);
+          }
+        }
+        break;
+      }
+    }
+    
+    // Extract projects
+    const projectKeywords = ['projects', 'project experience', 'key projects'];
+    const projects: string[] = [];
+    
+    for (let i = 0; i < lines.length; i++) {
+      if (projectKeywords.some(keyword => lines[i].includes(keyword))) {
+        for (let j = i + 1; j < Math.min(i + 10, lines.length); j++) {
+          const line = originalLines[j];
+          if (line && line.length > 15) {
+            projects.push(line);
+          }
+        }
+        break;
+      }
+    }
+    
+    // Extract experience
+    const experienceKeywords = ['experience', 'work experience', 'employment', 'career'];
+    const experience: string[] = [];
+    
+    for (let i = 0; i < lines.length; i++) {
+      if (experienceKeywords.some(keyword => lines[i].includes(keyword))) {
+        for (let j = i + 1; j < Math.min(i + 10, lines.length); j++) {
+          const line = originalLines[j];
+          if (line && line.length > 15) {
+            experience.push(line);
+          }
+        }
+        break;
+      }
+    }
+    
+    return {
+      name: name || 'Not found',
+      skills: skills.slice(0, 10), // Limit to first 10 skills
+      education: education.slice(0, 3),
+      projects: projects.slice(0, 5),
+      experience: experience.slice(0, 5),
+      contact: { email, phone }
+    };
+  };
+
+  const handleSubmitCV = async () => {
+    if (files.length === 0) {
+      toast({
+        title: "No files uploaded",
+        description: "Please upload CV files before submitting.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setExtracting(true);
+    const newExtractedInfo: ExtractedInfo[] = [];
+
+    try {
+      for (const file of files) {
+        let textContent = '';
+        
+        if (file.type === 'text/plain') {
+          const reader = new FileReader();
+          textContent = await new Promise((resolve) => {
+            reader.onload = (e) => resolve(e.target?.result as string);
+            reader.readAsText(file.file);
+          });
+        } else if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+          try {
+            const arrayBuffer = await file.file.arrayBuffer();
+            const result = await mammoth.extractRawText({ arrayBuffer });
+            textContent = result.value;
+          } catch (error) {
+            console.error('Error reading Word document:', error);
+            textContent = 'Error reading document';
+          }
+        } else if (file.type === 'application/pdf') {
+          // For PDF, we'll show a message that advanced parsing is needed
+          textContent = 'PDF parsing requires advanced processing. Please convert to DOCX or TXT for full extraction.';
+        }
+        
+        const extracted = extractInfoFromText(textContent);
+        newExtractedInfo.push(extracted);
+      }
+
+      setExtractedInfo(newExtractedInfo);
+      
+      toast({
+        title: "CV Information Extracted!",
+        description: `Successfully extracted information from ${files.length} CV file(s).`,
+      });
+    } catch (error) {
+      toast({
+        title: "Extraction Error",
+        description: "Failed to extract information from one or more files.",
+        variant: "destructive",
+      });
+    } finally {
+      setExtracting(false);
+    }
+  };
+
   // Update category counts
   const updatedCategories = fileCategories.map(cat => ({
     ...cat,
@@ -358,6 +532,25 @@ const JDUpload = () => {
               </Button>
             </div>
 
+            {/* Submit Button */}
+            <div className="mb-8 flex justify-center">
+              <Button
+                onClick={handleSubmitCV}
+                disabled={extracting || files.length === 0}
+                size="lg"
+                className="bg-primary hover:bg-primary/90 px-8 py-3"
+              >
+                {extracting ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Extracting Information...
+                  </>
+                ) : (
+                  'Extract CV Information'
+                )}
+              </Button>
+            </div>
+
             {/* Files Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {files.map((file) => (
@@ -406,6 +599,102 @@ const JDUpload = () => {
                 </Card>
               ))}
             </div>
+
+            {/* Extracted Information Display */}
+            {extractedInfo.length > 0 && (
+              <div className="mt-12">
+                <h2 className="text-3xl font-bold text-foreground mb-8">Extracted CV Information</h2>
+                <div className="space-y-8">
+                  {extractedInfo.map((info, index) => (
+                    <Card key={index} className="bg-gradient-card border-border/50 shadow-glow">
+                      <CardHeader>
+                        <CardTitle className="text-foreground flex items-center gap-2">
+                          <CheckCircle className="w-6 h-6 text-primary" />
+                          CV #{index + 1} - {info.name}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                          {/* Personal Information */}
+                          <div>
+                            <h3 className="text-lg font-semibold text-foreground mb-4">Personal Information</h3>
+                            <div className="space-y-2 text-sm">
+                              <div><strong>Name:</strong> {info.name}</div>
+                              <div><strong>Email:</strong> {info.contact.email || 'Not found'}</div>
+                              <div><strong>Phone:</strong> {info.contact.phone || 'Not found'}</div>
+                            </div>
+                          </div>
+
+                          {/* Skills */}
+                          <div>
+                            <h3 className="text-lg font-semibold text-foreground mb-4">Skills</h3>
+                            <div className="flex flex-wrap gap-2">
+                              {info.skills.length > 0 ? (
+                                info.skills.map((skill, skillIndex) => (
+                                  <Badge key={skillIndex} variant="secondary" className="text-xs">
+                                    {skill}
+                                  </Badge>
+                                ))
+                              ) : (
+                                <span className="text-muted-foreground text-sm">No skills found</span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Education */}
+                          <div>
+                            <h3 className="text-lg font-semibold text-foreground mb-4">Education</h3>
+                            <div className="space-y-2">
+                              {info.education.length > 0 ? (
+                                info.education.map((edu, eduIndex) => (
+                                  <div key={eduIndex} className="text-sm text-muted-foreground">
+                                    • {edu}
+                                  </div>
+                                ))
+                              ) : (
+                                <span className="text-muted-foreground text-sm">No education found</span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Projects */}
+                          <div>
+                            <h3 className="text-lg font-semibold text-foreground mb-4">Projects</h3>
+                            <div className="space-y-2">
+                              {info.projects.length > 0 ? (
+                                info.projects.map((project, projectIndex) => (
+                                  <div key={projectIndex} className="text-sm text-muted-foreground">
+                                    • {project}
+                                  </div>
+                                ))
+                              ) : (
+                                <span className="text-muted-foreground text-sm">No projects found</span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Experience */}
+                          <div className="lg:col-span-2">
+                            <h3 className="text-lg font-semibold text-foreground mb-4">Experience</h3>
+                            <div className="space-y-2">
+                              {info.experience.length > 0 ? (
+                                info.experience.map((exp, expIndex) => (
+                                  <div key={expIndex} className="text-sm text-muted-foreground">
+                                    • {exp}
+                                  </div>
+                                ))
+                              ) : (
+                                <span className="text-muted-foreground text-sm">No experience found</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            )}
           </>
         )}
 
