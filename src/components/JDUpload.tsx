@@ -5,8 +5,8 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { Upload, File, X, Eye, CheckCircle, AlertCircle, Search, Filter, Plus } from 'lucide-react';
 import mammoth from 'mammoth';
-import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist/build/pdf';
-import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.js?url';
+import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist';
+import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
 GlobalWorkerOptions.workerSrc = pdfWorker;
 interface UploadedFile {
@@ -224,13 +224,13 @@ const JDUpload = () => {
   const extractTextFromPdf = async (file: File): Promise<string> => {
     try {
       const arrayBuffer = await file.arrayBuffer();
-      const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+      const loadingTask = getDocument({ data: arrayBuffer });
       const pdf = await loadingTask.promise;
       let fullText = '';
       for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
         const page = await pdf.getPage(pageNum);
         const content = await page.getTextContent();
-        const strings = content.items.map((item: any) => item.str);
+        const strings = (content.items as any[]).map((item: any) => item.str);
         fullText += strings.join(' ') + '\n';
       }
       return fullText;
