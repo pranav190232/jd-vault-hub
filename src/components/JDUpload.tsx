@@ -5,7 +5,10 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { Upload, File, X, Eye, CheckCircle, AlertCircle, Search, Filter, Plus } from 'lucide-react';
 import mammoth from 'mammoth';
+import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist/build/pdf';
+import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.js?url';
 
+GlobalWorkerOptions.workerSrc = pdfWorker;
 interface UploadedFile {
   id: string;
   name: string;
@@ -218,6 +221,25 @@ const JDUpload = () => {
     }
   };
 
+  const extractTextFromPdf = async (file: File): Promise<string> => {
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+      const pdf = await loadingTask.promise;
+      let fullText = '';
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+        const page = await pdf.getPage(pageNum);
+        const content = await page.getTextContent();
+        const strings = content.items.map((item: any) => item.str);
+        fullText += strings.join(' ') + '\n';
+      }
+      return fullText;
+    } catch (e) {
+      console.error('PDF extraction failed', e);
+      return '';
+    }
+  };
+
   const extractInfoFromText = (text: string): ExtractedInfo => {
     const lines = text.toLowerCase().split('\n').map(line => line.trim());
     const originalLines = text.split('\n').map(line => line.trim());
@@ -350,14 +372,13 @@ const JDUpload = () => {
             textContent = result.value;
           } catch (error) {
             console.error('Error reading Word document:', error);
-            textContent = 'Error reading document';
+            textContent = '';
           }
         } else if (file.type === 'application/pdf') {
-          // For PDF, we'll show a message that advanced parsing is needed
-          textContent = 'PDF parsing requires advanced processing. Please convert to DOCX or TXT for full extraction.';
+          textContent = await extractTextFromPdf(file.file);
         }
         
-        const extracted = extractInfoFromText(textContent);
+        const extracted = extractInfoFromText(textContent || '');
         newExtractedInfo.push(extracted);
       }
 
@@ -486,6 +507,9 @@ const JDUpload = () => {
                 <span className="text-lg">Processing upload...</span>
               </div>
             )}
+            <div className="mt-4 text-xs text-muted-foreground">
+              Tip: For best results, upload a searchable PDF (not scanned) or a DOCX file.
+            </div>
           </CardContent>
         </Card>
 
