@@ -357,41 +357,39 @@ const JDUpload = () => {
 
     try {
       for (const file of files) {
-        let textContent = '';
-        
-        if (file.type === 'text/plain') {
-          const reader = new FileReader();
-          textContent = await new Promise((resolve) => {
-            reader.onload = (e) => resolve(e.target?.result as string);
-            reader.readAsText(file.file);
-          });
-        } else if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-          try {
-            const arrayBuffer = await file.file.arrayBuffer();
-            const result = await mammoth.extractRawText({ arrayBuffer });
-            textContent = result.value;
-          } catch (error) {
-            console.error('Error reading Word document:', error);
-            textContent = '';
-          }
-        } else if (file.type === 'application/pdf') {
-          textContent = await extractTextFromPdf(file.file);
+        const formData = new FormData();
+        formData.append('cv_file', file.file);
+
+        const response = await fetch('/api/extract-cv', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
         }
+
+        const extractedData = await response.json();
         
-        const extracted = extractInfoFromText(textContent || '');
-        newExtractedInfo.push(extracted);
+        if (extractedData.error) {
+          throw new Error(extractedData.error);
+        }
+
+        newExtractedInfo.push(extractedData);
       }
 
       setExtractedInfo(newExtractedInfo);
       
       toast({
         title: "CV Information Extracted!",
-        description: `Successfully extracted information from ${files.length} CV file(s).`,
+        description: `Successfully extracted information from ${files.length} CV file(s) using AI.`,
       });
     } catch (error) {
+      console.error('Error extracting CV information:', error);
       toast({
         title: "Extraction Error",
-        description: "Failed to extract information from one or more files.",
+        description: error instanceof Error ? error.message : "Failed to extract information from one or more files.",
         variant: "destructive",
       });
     } finally {
