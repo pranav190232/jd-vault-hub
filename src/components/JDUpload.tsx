@@ -7,8 +7,15 @@ import { Upload, File, X, Eye, CheckCircle, AlertCircle, Search, Filter, Plus } 
 import mammoth from 'mammoth';
 import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist';
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import { createClient } from '@supabase/supabase-js';
 
 GlobalWorkerOptions.workerSrc = pdfWorker;
+
+// Initialize Supabase client
+const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL || '',
+  import.meta.env.VITE_SUPABASE_ANON_KEY || ''
+);
 interface UploadedFile {
   id: string;
   name: string;
@@ -360,23 +367,19 @@ const JDUpload = () => {
         const formData = new FormData();
         formData.append('cv_file', file.file);
 
-        const response = await fetch('/api/extract-cv', {
-          method: 'POST',
+        const { data, error } = await supabase.functions.invoke('extract-cv', {
           body: formData,
         });
 
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+        if (error) {
+          throw new Error(error.message || 'Failed to extract CV information');
         }
 
-        const extractedData = await response.json();
-        
-        if (extractedData.error) {
-          throw new Error(extractedData.error);
+        if (data?.error) {
+          throw new Error(data.error);
         }
 
-        newExtractedInfo.push(extractedData);
+        newExtractedInfo.push(data);
       }
 
       setExtractedInfo(newExtractedInfo);
