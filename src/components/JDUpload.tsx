@@ -7,14 +7,9 @@ import { Upload, File, X, Eye, CheckCircle, AlertCircle, Search, Filter, Plus } 
 import mammoth from 'mammoth';
 import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist';
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '@/integrations/supabase/client';
 
 GlobalWorkerOptions.workerSrc = pdfWorker;
-
-// Initialize Supabase client only if environment variables are available
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 interface UploadedFile {
   id: string;
   name: string;
@@ -363,24 +358,22 @@ const JDUpload = () => {
 
     try {
       for (const file of files) {
-        // Try Groq AI extraction if Supabase is available
-        if (supabase) {
-          try {
-            const formData = new FormData();
-            formData.append('cv_file', file.file);
+        // Try Groq AI extraction via Supabase edge function
+        try {
+          const formData = new FormData();
+          formData.append('cv_file', file.file);
 
-            const { data, error } = await supabase.functions.invoke('extract-cv', {
-              body: formData,
-            });
+          const { data, error } = await supabase.functions.invoke('extract-cv', {
+            body: formData,
+          });
 
-            if (error) throw error;
-            if (data?.error) throw new Error(data.error);
-            
-            newExtractedInfo.push(data);
-            continue;
-          } catch (error) {
-            console.warn('Groq extraction failed, falling back to basic parsing:', error);
-          }
+          if (error) throw error;
+          if (data?.error) throw new Error(data.error);
+          
+          newExtractedInfo.push(data);
+          continue;
+        } catch (error) {
+          console.warn('Groq extraction failed, falling back to basic parsing:', error);
         }
 
         // Fallback to basic text extraction
