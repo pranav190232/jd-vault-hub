@@ -11,11 +11,10 @@ import { createClient } from '@supabase/supabase-js';
 
 GlobalWorkerOptions.workerSrc = pdfWorker;
 
-// Initialize Supabase client
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL || '',
-  import.meta.env.VITE_SUPABASE_ANON_KEY || ''
-);
+// Initialize Supabase client only if environment variables are available
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 interface UploadedFile {
   id: string;
   name: string;
@@ -364,29 +363,57 @@ const JDUpload = () => {
 
     try {
       for (const file of files) {
-        const formData = new FormData();
-        formData.append('cv_file', file.file);
+        // Try Groq AI extraction if Supabase is available
+        if (supabase) {
+          try {
+            const formData = new FormData();
+            formData.append('cv_file', file.file);
 
-        const { data, error } = await supabase.functions.invoke('extract-cv', {
-          body: formData,
-        });
+            const { data, error } = await supabase.functions.invoke('extract-cv', {
+              body: formData,
+            });
 
-        if (error) {
-          throw new Error(error.message || 'Failed to extract CV information');
+            if (error) throw error;
+            if (data?.error) throw new Error(data.error);
+            
+            newExtractedInfo.push(data);
+            continue;
+          } catch (error) {
+            console.warn('Groq extraction failed, falling back to basic parsing:', error);
+          }
         }
 
-        if (data?.error) {
-          throw new Error(data.error);
+        // Fallback to basic text extraction
+        let textContent = '';
+        
+        if (file.type === 'text/plain') {
+          const reader = new FileReader();
+          textContent = await new Promise((resolve) => {
+            reader.onload = (e) => resolve(e.target?.result as string);
+            reader.readAsText(file.file);
+          });
+        } else if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+          try {
+            const arrayBuffer = await file.file.arrayBuffer();
+            const result = await mammoth.extractRawText({ arrayBuffer });
+            textContent = result.value;
+          } catch (error) {
+            console.error('Error reading Word document:', error);
+            textContent = '';
+          }
+        } else if (file.type === 'application/pdf') {
+          textContent = await extractTextFromPdf(file.file);
         }
-
-        newExtractedInfo.push(data);
+        
+        const extracted = extractInfoFromText(textContent || '');
+        newExtractedInfo.push(extracted);
       }
 
       setExtractedInfo(newExtractedInfo);
       
       toast({
         title: "CV Information Extracted!",
-        description: `Successfully extracted information from ${files.length} CV file(s) using AI.`,
+        description: `Successfully extracted information from ${files.length} CV file(s)${supabase ? ' using AI' : ''}.`,
       });
     } catch (error) {
       console.error('Error extracting CV information:', error);
