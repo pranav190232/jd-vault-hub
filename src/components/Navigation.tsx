@@ -1,7 +1,7 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { FileText, Home, User, LogOut } from 'lucide-react';
+import { FileText, Home, User, LogOut, TestTube } from 'lucide-react';
 
 const Navigation = () => {
   const navigate = useNavigate();
@@ -33,6 +33,15 @@ const Navigation = () => {
             >
               <Home className="w-4 h-4" />
               Dashboard
+            </Button>
+
+            <Button
+              variant={isActive('/testing') ? 'default' : 'ghost'}
+              onClick={() => navigate('/testing')}
+              className="gap-2"
+            >
+              <TestTube className="w-4 h-4" />
+              Testing
             </Button>
             
             <Button
